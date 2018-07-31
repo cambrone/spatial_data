@@ -11,6 +11,6 @@ The project used data on crime from LAPD and from the ACS. More details are prov
 The project covers the theoretical concepts and applications of the following topics:
 
 -	Summary statistics using dplyr
--	Ggplot
--	Ggmap
+-	ggplot
+-	ggmap
 -	Shapefiles for GIS
