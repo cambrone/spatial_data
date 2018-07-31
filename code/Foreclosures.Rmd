@@ -1,0 +1,161 @@
+---
+title: "Foreclosure in Los Angeles County"
+author: "Andres Cambronero"
+output: pdf_document
+geometry: margin=0.5in
+fontsize: 10pt
+latex_engine: xelatex
+header-includes:
+  - \usepackage{float}
+---
+
+```{r setup, include=FALSE, message=FALSE, echo=FALSE}
+#load packages
+library(dplyr)
+library(ggplot2)
+library(stringr)
+library(zipcode)
+library(maps)
+library(mapdata)
+library(Cairo)
+library(rgdal)
+library(tidyr)
+library(ggmap)
+library(gridExtra)
+library(sp)
+library(knitr)
+```
+The graphs presented in my report "Crime Los Angeles County" suggest that particular communities in LA experienced more criminal activity in 2013 than others. Given that crime is linked to other social problems, this report examines whether these communities also experienced additional hardships. In particular, it investigates: first, whether the areas that witnessed most crime (according to the results of "Crime Los Angeles County") also experienced most home foreclosures, and second whether foreclosures were associated with a particular income group. 
+
+The data used to answer these questions were: "2017 Registered Foreclosure Properties", the 2011-2015 American Community Survey downloaded by ZIP Code, a list of LA county ZIP codes, and a shapefile of all ZIP codes in the US. The first dataset contained instances of single and multihome foreclosures in LA county. From this dataset the report relied on the variables propertytype and propertyzip. The second dataset provided the income information of residents by ZIP codes in the California and the third dataset provided a list of ZIP codes within LA county. The final dataset provided the geometric location of all ZIP codes in the United States. 
+
+To examine whether foreclosures were more more highly associated with a particular income group, I merged the property ZIP code in the foreclosure data with the corresponding mean income using American Community Survey. Then, I computed a frequency table of the number of times a particular ZIP code was reported in a foreclosure entry. I plotted the proportion of home foreclosures in the dataset according to the average income of the ZIP code, where the foreclosure occured. The result of this graph is shown on lower left 
+
+To examine whether the areas experienced most crime also experienced the most home foreclosures, I created a plot of the frequency home foreclosures in LA county by ZIP code. To do so, I used the ZIP code list provided by the county to identify the geometric information of ZIP codes corresponding to LA in the shapefile. The results are plotted using ggplot: 
+
+```{r,echo=FALSE, message=FALSE, warning=FALSE}
+setwd("~/Desktop/Michigan/computational_methods/final project/individual component")
+
+#load data
+foreclosure<-read.csv("foreclosure_data.csv")
+income<-read.csv("income_data.csv")
+zip_LA<-read.csv("zip_codes.csv")
+
+###prepare income data
+#make first row into colulmn header
+names(income) <- as.matrix(income[1, ])
+income <- income[-1, ]
+income[] <- lapply(income, function(x) type.convert(as.character(x)))
+
+#select approapriate columns
+income <- select(income, "Id2",
+                 "Households; Estimate; Mean income (dollars)")
+
+#change names of columns
+colnames(income)<- c("zip", "household_mean")
+
+#select income data for the LA county zip codes
+colnames(zip_LA)<- c("zip", "area")
+income_LA<-subset(income, zip %in% zip_LA$zip)
+
+#keep the hometype in foreclosure data
+foreclosure<-filter(foreclosure,
+             PropertyType==c("Single Family","Multi-Family"))
+
+#find number of home forclosures by
+foreclosure = 
+foreclosure %>%
+  group_by(PropertyType,PropertyZip) %>%
+  summarise(count = n()) 
+
+#change names to summarized data
+colnames(foreclosure)<-c("Type", "zip", "count")
+
+#merge summarized data with income data
+foreclosure<-merge(foreclosure, income_LA, by="zip")
+
+#make income numeric
+foreclosure$household_mean<-as.numeric(as.character(foreclosure$household_mean))
+
+#order by count
+foreclosure <- foreclosure[order(-foreclosure$count),] 
+```
+
+```{r,echo=FALSE, message=FALSE, warning=FALSE}
+#function to change ticks in x axis
+number_ticks <- function(n) {
+  function(limits) pretty(limits, n)
+  }
+
+#graph relationship between income and foreclosures
+income_fore<-ggplot(foreclosure, aes(x=household_mean, 
+  fill=Type, colour=Type)) +
+  geom_density(alpha = 0.1) +
+  ggtitle("Foreclosures by Income") +
+  xlab("Income") +
+  ylab("Proportion") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1,size=8),
+  legend.position = "bottom", axis.text.y = element_text(angle = 90, hjust = 1,size=8),
+  plot.title = element_text(hjust = 0.5,size=14),panel.background = element_blank()) +
+  scale_x_continuous(breaks=number_ticks(10))
+```
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+#sum the forclosures for the two house types
+foreclosure=
+  foreclosure %>%
+  group_by(zip)%>%
+  summarise(count=sum(count))
+
+#read in shapefile
+tract <- readOGR(dsn = ".", layer = "CAMS_ZIPCODE_PARCEL_SPECIFIC", verbose = FALSE)
+tract <- fortify(tract, region="ZIPCODE")
+
+#change column id in summarized data
+colnames(foreclosure)<-c("id","count")
+
+#change type in id character
+foreclosure$id<-as.character(foreclosure$id)
+
+#join shapefile info with the summarized data
+plotData <- left_join(tract, foreclosure)
+
+#make zipcode plot
+zip_map <- ggplot() +
+  geom_polygon(data = plotData,
+  aes(x = long, y = lat, group = group,
+  fill = count), color = "black", size = 0.25) +
+  ylim(1700000, 2100000) +
+  theme(panel.background = element_blank()) +
+  ggtitle("Count of Foreclosures") +
+  theme(legend.position = "bottom", plot.title = element_text(hjust = 0.5),
+  axis.ticks.y = element_blank(), axis.text.y = element_blank(),
+  axis.ticks.x = element_blank(), axis.text.x = element_blank())
+```
+
+```{r,echo=FALSE, message=FALSE, warning=FALSE, out.width = '65%', fig.align="center", fig.cap="Foreclosures by income (left), and frequency of foreclosures by ZIP code (right)",fig.pos="H"}
+grid.arrange(income_fore,zip_map, ncol=2)
+```
+
+Since the income axis is continous, the graph on the left shows that no single income group is responsible for a large proportion of foreclosures in LA in 2017. However, the plot clearly shows that most foreclosures of single and multi-family homes have occurred in low and middle income groups, with a few instances in higher income groups. As expected, the areas that experienced most home foreclosures in 2017 are also the areas that reported most crimes in 2013. The plot on the right that most foreclosures occured in the central part on Los Angeles, which is the area of the city that reported most burglaries, thefts and assaults according to the results of the previous report. These result suggest that communities experiencing criminal activity also experience other social problems like low income and house hold instability. 
+
+To investigate the question further, researchers could plot income by ZIP code along with foreclosures and criminal activity. All three indicators would probably overlap in the same areas. 
+
+
+$\pagebreak$
+
+#References
+\setlength{\parindent}{-0.2in}
+\setlength{\leftskip}{0.2in}
+\setlength{\parskip}{8pt}
+\noindent
+
+City of Los Angeles. (2017). "2017 Registered Foreclosure Properties." (Common Separated Values).  Retrieved from: https://catalog.data.gov/dataset/2017-registered-foreclosure-properties
+
+Couty of Los Angeles. (2017). "County of Los Angeles ZIP CODE LIST." Retrived from: http://ceo.lacounty.gov/forms/zipcodes/master%20zip%20codes.pdf
+
+Los Angeles County Address Management System. (2011). "LA County Street & Address File." (Zipped Shapefile). Retrived from: http://egis3.lacounty.gov/dataportal/2014/06/16/2011-la-county-street-centerline-street-address-file/
+
+United States Census Bureau.(2015). "American Fact Finder." (Common Separated Values). Retrieved from:  https://factfinder.census.gov/faces/nav/jsf/pages/community_facts.xhtml
+
+
