@@ -1,5 +1,5 @@
 # spatial_data
-individual project mapping crime and foreclosures in LA
+Individual project mapping crime and foreclosures in LA
 
 
 This repository contains the code and data to reproduce the reports “Crimes in LA County” and “Foreclosures in LA County.” The two reports were part of the individual portion of the final project for STAT506 Statistical Computing at UM-Ann Arbor. The project explores the geographic distribution of two social and economic problems in the LA area. 
